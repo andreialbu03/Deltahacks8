@@ -1,5 +1,6 @@
 import discord
 
+
 client = discord.Client()
 
 
@@ -7,6 +8,7 @@ client = discord.Client()
 async def on_ready():
     print('We have logged in a {0.user}'.format(client))
     return
+
 
 @client.event
 async def on_message(message):
@@ -17,8 +19,12 @@ async def on_message(message):
         await message.channel.send("Hello!")
 
 
+def main ():
+    try:
+        client.run("OTMxOTMxNTUyNTcxNjA1MDQy.YeLm5A.uwvgcM9dZOkCPyY4C_vdn2mZHbc")
+    except discord.errors.HTTPException:
+        print("Token is broken, get a new one")
 
-try :
-    client.run("OTMxOTMxNTUyNTcxNjA1MDQy.YeLm5A.uwvgcM9dZOkCPyY4C_vdn2mZHbc")
-except discord.errors.HTTPException:
-    print("Token is broken, get a new one") 
+
+if __name__=="__main__":
+    main()
