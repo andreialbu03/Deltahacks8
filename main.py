@@ -1,6 +1,10 @@
 import discord
+from dotenv import load_dotenv, find_dotenv
+import os
 
 client = discord.Client()
+load_dotenv(find_dotenv())
+TOKEN = os.environ.get("TOKEN")
 
 
 @client.event
@@ -19,6 +23,6 @@ async def on_message(message):
 
 
 try :
-    client.run("OTMxOTMxNTUyNTcxNjA1MDQy.YeLm5A.uwvgcM9dZOkCPyY4C_vdn2mZHbc")
+    client.run(TOKEN)
 except discord.errors.HTTPException:
     print("Token is broken, get a new one") 
