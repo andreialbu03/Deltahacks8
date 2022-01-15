@@ -1,4 +1,7 @@
 import discord
+import logging
+import os
+import psycopg2
 
 
 client = discord.Client()
