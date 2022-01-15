@@ -1,18 +1,21 @@
 import discord
-from dotenv import load_dotenv, find_dotenv
 import os
 import logging
 import os
 import psycopg2
+from configparser import ConfigParser
 
 
 client = discord.Client()
-load_dotenv(find_dotenv())
-TOKEN = os.environ.get("TOKEN")
+config = ConfigParser()
+config.read('config.cfg')
+DISCORD_TOKEN = config["DISCORD"]["TOKEN"]
+COCK_TOKEN = config["COCKROACH"]["TOKEN"]
 
 
 @client.event
 async def on_ready():
+
     print('We have logged in a {0.user}'.format(client))
     return
 
@@ -28,7 +31,7 @@ async def on_message(message):
 
 def main ():
     try :
-        client.run(TOKEN)
+        client.run(DISCORD_TOKEN)
     except discord.errors.HTTPException:
         print("Token is broken, get a new one")
 
