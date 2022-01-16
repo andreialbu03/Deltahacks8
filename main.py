@@ -1,3 +1,4 @@
+import asyncio
 from re import L
 import discord
 import os
@@ -6,12 +7,18 @@ import os
 import sqlite3
 from dotenv import load_dotenv, find_dotenv
 import help
+from datetime import datetime
+import sched, time
 
 
-client = discord.Client()
+"""
+The reason you are only getting bot, is because you are missing intents. You have to enable intents from the application page for your bot, and also enable intents in your code
+"""
+intents = discord.Intents.default(members=True)
+client = discord.Client(intents=intents)
+
 load_dotenv(find_dotenv())
 TOKEN = os.environ.get("TOKEN")
-
 
 def dbCreate():
     connection = sqlite3.connect("users.db")
@@ -72,7 +79,7 @@ async def on_message(message):
     # User's to-do list
     elif formattedlist[0] == '$list':
         #await message.channel.send('You currently do not have a to-do list')
-        await displayList(message)
+        await displayList(message.author.name, message.author.id)
 
     # Adding items to the assignment table
     # $add name yyyy-mm-dd
@@ -104,16 +111,39 @@ def addUser(message):
 
 
 @client.event 
-async def displayList(message):
+async def displayList(user_id, name):
     connection = sqlite3.connect("assignments.db")
     cursor = connection.cursor()
 
     # if cursor.execute(f"SELECT EXISTS (SELECT 1 FROM assignments WHERE user_id = {message.author.id})") is True:
-    sql_query =  """SELECT * FROM assignments INNER JOIN users ON assignments.user_id = users.user_id"""
-    cursor.execute(sql_query, (message.author.id, message.author.name))
+    sql_query =  """
+        SELECT * FROM assignments 
+        INNER JOIN users ON assignments.user_id = users.user_id
+    """
+    cursor.execute(sql_query, (user_id, name))
     result = cursor.fetchall()
+    desc = []
     for row in result:
         print(row)
+        desc.append(str(row))
+
+    # Sort by lowest highest priority
+    desc.sort(key=lambda row: datetime.strptime(row[1], "%Y-%m-%d"))
+
+    embed = discord.Embed(
+        title=name,
+        description='\n'.join(desc),
+        colour=discord.Colour.blue()
+    )
+
+    embed.set_footer(text='This is a footer.') \
+        .set_image(url="https://store-images.microsoft.com/image/apps.52799.9007199266242703.8cfbff59-6913-4d81-a0ea-d80eca6e999e.32f4abfb-ea86-4bdb-9520-5868179da613?w=498&h=408&q=90&mode=scale&format=jpg&background=%230078D7&padding=0.0.0.0") \
+        .set_thumbnail(url="https://store-images.microsoft.com/image/apps.52799.9007199266242703.8cfbff59-6913-4d81-a0ea-d80eca6e999e.32f4abfb-ea86-4bdb-9520-5868179da613?w=498&h=408&q=90&mode=scale&format=jpg&background=%230078D7&padding=0.0.0.0") \
+        .set_author(name="Author Name", icon_url="https://store-images.microsoft.com/image/apps.52799.9007199266242703.8cfbff59-6913-4d81-a0ea-d80eca6e999e.32f4abfb-ea86-4bdb-9520-5868179da613?w=498&h=408&q=90&mode=scale&format=jpg&background=%230078D7&padding=0.0.0.0") \
+        .set_field(name="display list")
+
+    await client.say(embed=embed)
+    
     # else:
     #     await message.channel.send('You have nothing in your list. Please add something!')
     
@@ -129,7 +159,7 @@ def addAssignment (query, message):
     
     cursor.execute('''
         INSERT INTO assignments (name, due_date, user_id) VALUES (?,?,?)
-    ''', (query[0], query[1]+" 23:59:59", message.author.id))
+    ''', (query[0], query[1], message.author.id))
 
     connection.commit()
     cursor.close()
@@ -138,15 +168,42 @@ def addAssignment (query, message):
 
 # Delete an assignment id
 def deleteAssignment (query, message):
-    pass
+    connection = sqlite3.connect("assignments.db")
+    cursor = connection.cursor()
+
+    cursor.execute('''
+        DELETE FROM assignments
+        WHERE name = ? AND user_id = ?
+    ''', (query[0], message.author.id))
+
+    connection.commit()
+    cursor.close()
+    connection.close()
     
 
+# Notify the user that their homework is going to be due
+# https://stackoverflow.com/questions/65808190/get-all-members-discord-py
+async def notifier ():
+    while True:
+        for guild in client.guilds:
+            for member in guild.members:
+                if not all(type(x)==str for x in [member.name, member.user_id]):
+                    raise "well crap member.name and member.user_id don't exist what are they"
+                await displayList(member.name, member.user_id)
+        
+        # adjust timer to go every few other seconds
+        await asyncio.sleep(60)
+
+
 def main ():
-    try :
+    try:
         dbCreate()
+        # may cause an error since main is not async
+        client.loop.create_task(notifier())
         client.run(TOKEN)
-    except discord.errors.HTTPException:
+    except discord.errors.HTTPException as e:
         print("Token is broken, get a new one")
+        print(e)
     except Exception as e:
         print(e)
 
