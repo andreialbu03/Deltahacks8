@@ -1,4 +1,5 @@
 import asyncio
+from email import message
 from re import L
 import discord
 import os
@@ -10,51 +11,47 @@ import help
 from datetime import datetime
 import sched, time
 
-
 """
 The reason you are only getting bot, is because you are missing intents. You have to enable intents from the application page for your bot, and also enable intents in your code
 """
 intents = discord.Intents.default()
 intents.members = True
 client = discord.Client(intents=intents)
+pfp_path = "pfp.png"
+fp = open(pfp_path, 'rb')
+pfp = fp.read()
 
 load_dotenv(find_dotenv())
 TOKEN = os.environ.get("TOKEN")
 
 def dbCreate():
     connection = sqlite3.connect("users.db")
-    connection2 = sqlite3.connect("assignments.db")
     cursor = connection.cursor()
-    cursor2 = connection2.cursor()
 
-    cursor.execute(''' 
+    cursor.executescript(''' 
         CREATE TABLE IF NOT EXISTS users ( 
             user_id INTEGER NOT NULL,
             name TEXT NOT NULL,
             PRIMARY KEY (user_id)
-        )
-    ''')
-    cursor2.execute('''
+        );
         CREATE TABLE IF NOT EXISTS assignments (
             assignment_id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             due_date TEXT NOT NULL,
             user_id INTEGER NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users (user_id)
-        )
+        );
     ''')
 
     connection.commit()
-    connection2.commit()
     cursor.close()
-    cursor2.close()
     connection.close()
-    connection2.close()
 
 
 @client.event
 async def on_ready():
     print('We have logged in a {0.user}'.format(client))
+    await client.user.edit(avatar=pfp)
     return
 
 
@@ -65,7 +62,7 @@ async def on_message(message):
     channel = str(message.channel.name)
     print(f'{username}: {user_message} ({channel})')
 
-    if user_message[0] != '$' or message.author == client.user:
+    if len(user_message)==0 or user_message[0] != '$' or message.author == client.user:
         return
 
     addUser(message)
@@ -91,7 +88,7 @@ async def on_message(message):
     # $delete allows you to delete items from the assignment table
     elif formattedlist[0] == '$delete':
         deleteAssignment(formattedlist[1:], message)
-        await message.channel.send("")
+        await message.channel.send(f"You have deleted {formattedlist[1]} from your list!")
 
     else:
         await message.channel.send('That command does not exist!')
@@ -112,50 +109,47 @@ def addUser(message):
 
 
 @client.event 
-async def displayList(user_id, name):
-    connection = sqlite3.connect("assignments.db")
+async def displayList(name, user_id):
+    connection = sqlite3.connect("users.db")
     cursor = connection.cursor()
 
     # if cursor.execute(f"SELECT EXISTS (SELECT 1 FROM assignments WHERE user_id = {message.author.id})") is True:
-    sql_query =  """
-        SELECT * FROM assignments 
-        INNER JOIN users ON assignments.user_id = users.user_id
-    """
-    cursor.execute(sql_query, (user_id, name))
+    cursor.execute(f"SELECT * FROM assignments WHERE user_id={user_id}")
     result = cursor.fetchall()
     desc = []
     for row in result:
         print(row)
-        desc.append(str(row))
+        desc.append(row[1:3])
 
     # Sort by lowest highest priority
-    desc.sort(key=lambda row: datetime.strptime(row[1], "%Y-%m-%d"))
+    desc.sort(key=lambda row: datetime.strptime(row[1], "%m/%d/%Y"))
 
     embed = discord.Embed(
-        title=name,
-        description='\n'.join(desc),
+        title="Assignments",
         colour=discord.Colour.blue()
     )
 
-    embed.set_footer(text='This is a footer.') \
-        .set_image(url="https://store-images.microsoft.com/image/apps.52799.9007199266242703.8cfbff59-6913-4d81-a0ea-d80eca6e999e.32f4abfb-ea86-4bdb-9520-5868179da613?w=498&h=408&q=90&mode=scale&format=jpg&background=%230078D7&padding=0.0.0.0") \
+    embed \
         .set_thumbnail(url="https://store-images.microsoft.com/image/apps.52799.9007199266242703.8cfbff59-6913-4d81-a0ea-d80eca6e999e.32f4abfb-ea86-4bdb-9520-5868179da613?w=498&h=408&q=90&mode=scale&format=jpg&background=%230078D7&padding=0.0.0.0") \
-        .set_author(name="Author Name", icon_url="https://store-images.microsoft.com/image/apps.52799.9007199266242703.8cfbff59-6913-4d81-a0ea-d80eca6e999e.32f4abfb-ea86-4bdb-9520-5868179da613?w=498&h=408&q=90&mode=scale&format=jpg&background=%230078D7&padding=0.0.0.0") \
-        .set_field(name="display list")
-
-    await client.say(embed=embed)
+        .set_author(name=f"{name}'s Schedule", icon_url="https://store-images.microsoft.com/image/apps.52799.9007199266242703.8cfbff59-6913-4d81-a0ea-d80eca6e999e.32f4abfb-ea86-4bdb-9520-5868179da613?w=498&h=408&q=90&mode=scale&format=jpg&background=%230078D7&padding=0.0.0.0")
     
+    for name, due_date in desc:
+        embed.add_field(name=name, value=due_date)
+
     # else:
     #     await message.channel.send('You have nothing in your list. Please add something!')
     
     connection.commit()
     cursor.close()
     connection.close()
-    
+
+    channel = client.get_channel(932059195925213214)
+    await channel.send(embed=embed)
+
     
 # Add an assignment to the db (includes name, due_date)
 def addAssignment (query, message):
-    connection = sqlite3.connect("assignments.db")
+    connection = sqlite3.connect("users.db")
     cursor = connection.cursor()
     
     cursor.execute('''
@@ -169,7 +163,7 @@ def addAssignment (query, message):
 
 # Delete an assignment id
 def deleteAssignment (query, message):
-    connection = sqlite3.connect("assignments.db")
+    connection = sqlite3.connect("users.db")
     cursor = connection.cursor()
 
     cursor.execute('''
@@ -188,9 +182,12 @@ async def notifier ():
     while True:
         for guild in client.guilds:
             for member in guild.members:
-                if not all(type(x)==str for x in [member.name, member.user_id]):
-                    raise "well crap member.name and member.user_id don't exist what are they"
-                await displayList(member.name, member.user_id)
+                if any(x is None for x in [member.display_name, member.id]):
+                    raise Exception("well crap member.name and member.user_id don't exist what are they")
+                elif member.display_name!="Scheduler":
+                    channel = client.get_channel(932059195925213214)
+                    await channel.send("NOTIFYING CHANNEL")
+                    await displayList(member.display_name, member.id)
         
         # adjust timer to go every few other seconds
         await asyncio.sleep(60)
