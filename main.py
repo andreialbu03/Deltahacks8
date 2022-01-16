@@ -14,7 +14,8 @@ import sched, time
 """
 The reason you are only getting bot, is because you are missing intents. You have to enable intents from the application page for your bot, and also enable intents in your code
 """
-intents = discord.Intents.default(members=True)
+intents = discord.Intents.default()
+intents.members = True
 client = discord.Client(intents=intents)
 
 load_dotenv(find_dotenv())
